@@ -165,25 +165,34 @@ export default {
       try {
         const payload = await request.json();
         
-        // 注文完了イベント(order_created)のみ処理する
-        if (payload.meta.event_name === 'order_created') {
-          // 決済時にURLパラメータで渡された shop_id を取得
-          const shopId = payload.meta.custom_data.shop_id;
+        // order_created (注文完了) の時だけ動かす
+        if (payload.meta && payload.meta.event_name === 'order_created') {
           
-          // 購入金額を取得 (Lemon Squeezyは日本円の場合、そのままの数値が来る。例: 5000)
-          const amount = payload.data.attributes.total; 
+          // エラー回避のため、データが無い場合は空のオブジェクトを入れる
+          const customData = payload.meta.custom_data || {};
+          const shopId = customData.shop_id; 
           
-          // D1データベースの ad_balance を加算する
-          if (shopId && amount > 0) {
+          // Lemon Squeezy の金額データ (total) を取得
+          const amount = payload.data?.attributes?.total;
+
+          // 万が一 shopId が取得できなかった場合の安全装置
+          if (!shopId) {
+            console.log("エラー: shop_id がLemon Squeezyから送られてきませんでした");
+            return new Response("Missing shop_id", { status: 400, headers: corsHeaders });
+          }
+
+          if (amount > 0) {
+            // DBの残高を増やす
             await env.DB.prepare(`
               UPDATE shops SET ad_balance = ad_balance + ? WHERE id = ?
             `).bind(amount, shopId).run();
-            console.log(`VAI: ${shopId} に ${amount}円 チャージ完了！`);
+            console.log(`チャージ成功: ${shopId} に ${amount}円`);
           }
         }
-        return new Response("Webhook Received", { status: 200, headers: corsHeaders });
+        
+        return new Response("Webhook OK", { status: 200, headers: corsHeaders });
       } catch (error) {
-        console.error("Webhook Error:", error);
-        return new Response("Webhook Error", { status: 400, headers: corsHeaders });
+        console.error("Webhookの処理中にエラー:", error);
+        return new Response("Webhook Error", { status: 500, headers: corsHeaders });
       }
     }
