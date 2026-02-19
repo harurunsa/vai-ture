@@ -2,6 +2,18 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
 
+    // --- CORS（クロスドメイン通信）の事前準備 ---
+    const corsHeaders = {
+      'Access-Control-Allow-Origin': '*', // 本番ではドメインを指定します
+      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type'
+    };
+
+    // ブラウザからの事前確認（OPTIONSリクエスト）にOKを返す
+    if (request.method === 'OPTIONS') {
+      return new Response(null, { headers: corsHeaders });
+    }
+
     // ==========================================
     // 1. [API] AIエージェント向け検索＆広告配信
     // ==========================================
@@ -17,7 +29,7 @@ export default {
 
       // 簡易オークション: 関連度(今はランダムで代用) × 単価 でスコア化
       const rankedShops = results.map(shop => {
-        const relevance = Math.random(); // 実際はAIのベクトル検索等を使用
+        const relevance = Math.random();
         const score = relevance * shop.cpc_bid;
         return { ...shop, score };
       }).sort((a, b) => b.score - a.score).slice(0, 5); // 上位5件
@@ -25,12 +37,11 @@ export default {
       // AIに渡すレスポンス (クリック計測用URLに変換して渡す)
       const response = rankedShops.map(shop => ({
         name: shop.name,
-        // ここが重要！直リンクではなく、VAIの計測URLを経由させる
         booking_url: `${url.origin}/click?shop_id=${shop.id}&target=${encodeURIComponent(shop.url)}`
       }));
 
-      return new Response(JSON.stringify({ results: response }), {
-        headers: { 'Content-Type': 'application/json' }
+      return new Response(JSON.stringify({ results: response }), { 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
     }
 
@@ -40,15 +51,16 @@ export default {
     if (url.pathname === '/click') {
       const shopId = url.searchParams.get('shop_id');
       const targetUrl = url.searchParams.get('target');
-      const userId = url.searchParams.get('user_id') || 'guest'; // ボット経由で渡される想定
+      const userId = url.searchParams.get('user_id') || 'guest';
       const clickId = crypto.randomUUID();
       const now = Date.now();
 
-      // トランザクション: ログ保存と店舗の残高(ad_balance)引き落とし
+      // ログ保存
       await env.DB.prepare(`
         INSERT INTO clicks (id, shop_id, user_id, clicked_at) VALUES (?, ?, ?, ?)
       `).bind(clickId, shopId, userId, now).run();
 
+      // 店舗の残高(ad_balance)引き落とし
       await env.DB.prepare(`
         UPDATE shops SET ad_balance = ad_balance - cpc_bid WHERE id = ?
       `).bind(shopId).run();
@@ -64,33 +76,32 @@ export default {
     if (url.pathname === '/track/micro-cv' && request.method === 'POST') {
       const { click_id } = await request.json();
       
-      // ログを更新し、このユーザーのランクを「2(優良)」に上げる
       await env.DB.prepare(`UPDATE clicks SET has_micro_cv = TRUE WHERE id = ?`).bind(click_id).run();
       await env.DB.prepare(`
         UPDATE users SET rank = 2 
         WHERE id = (SELECT user_id FROM clicks WHERE id = ?)
       `).bind(click_id).run();
 
-      return new Response("OK");
+      return new Response("OK", { headers: corsHeaders });
     }
 
     // ==========================================
     // 4. [Gacha] 10秒滞在チェック＆ガチャ抽選
     // ==========================================
-    if (url.pathname === '/api/gacha/spin') {
+    if (url.pathname === '/api/gacha/spin' && request.method === 'POST') {
       const { click_id, user_id } = await request.json();
 
-      // クリック情報を取得
       const click = await env.DB.prepare(`SELECT * FROM clicks WHERE id = ? AND user_id = ?`).bind(click_id, user_id).first();
       
-      if (!click || click.gacha_spun) return new Response("無効なリクエストです", { status: 400 });
+      if (!click || click.gacha_spun) {
+        return new Response(JSON.stringify({ error: "無効なリクエストです" }), { status: 400, headers: corsHeaders });
+      }
 
       // 10秒(10000ms)滞在フィルター
       if (Date.now() - click.clicked_at < 10000) {
-        return new Response(JSON.stringify({ error: "ちゃんとサイトを10秒以上見てください！" }), { status: 400 });
+        return new Response(JSON.stringify({ error: "ちゃんとサイトを10秒以上見てください！" }), { status: 400, headers: corsHeaders });
       }
 
-      // ユーザーランクを取得
       const user = await env.DB.prepare(`SELECT rank FROM users WHERE id = ?`).bind(user_id).first();
       const rank = user ? user.rank : 1;
 
@@ -99,12 +110,10 @@ export default {
       const rand = Math.random() * 100;
 
       if (rank === 2) {
-        // Micro-CV(予約ボタン押下)した神客は当たりやすい
         if (rand < 5) winAmount = 500; // 5%で500円
         else if (rand < 20) winAmount = 50; // 15%で50円
         else winAmount = 2; // 外れても2円
       } else {
-        // 見るだけ層 (10秒滞在)
         if (rand < 0.1) winAmount = 1000; // 0.1%の夢
         else winAmount = 1; // 基本1円
       }
@@ -113,21 +122,19 @@ export default {
       await env.DB.prepare(`UPDATE clicks SET gacha_spun = TRUE WHERE id = ?`).bind(click_id).run();
       await env.DB.prepare(`UPDATE users SET points = points + ? WHERE id = ?`).bind(winAmount, user_id).run();
 
-      return new Response(JSON.stringify({ message: "ガチャ結果！", points_won: winAmount }));
+      return new Response(JSON.stringify({ message: "ガチャ結果！", points_won: winAmount }), { 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
     }
 
-    return new Response("VAI Ad Network API is running.");
-  }
-};
-
-// ==========================================
+    // ==========================================
     // 5. [Admin] 店舗情報の登録・更新
     // ==========================================
     if (url.pathname === '/api/admin/shop' && request.method === 'POST') {
       const data = await request.json();
       
-      // D1の機能 (ON CONFLICT) を使って、新規登録または上書き更新を1発で行う
-      // ※初回登録ボーナスとして、テスト用に ad_balance に 5000円 をチャージしています
+      // D1のUPSERT機能 (新規登録または上書き更新)
+      // テスト用に ad_balance に 5000円 をチャージしています
       await env.DB.prepare(`
         INSERT INTO shops (id, name, url, plan, cpc_bid, ad_balance) 
         VALUES (?, ?, ?, 'pro', ?, 5000)
@@ -137,24 +144,11 @@ export default {
           cpc_bid = excluded.cpc_bid
       `).bind(data.id, data.name, data.url, data.cpc_bid).run();
 
-      // CORSヘッダーをつけて返す（HTMLファイルから直接アクセスできるようにするため）
-      return new Response(JSON.stringify({ success: true }), {
-        headers: {
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*', // 本番ではドメインを絞ります
-          'Access-Control-Allow-Methods': 'POST, OPTIONS',
-          'Access-Control-Allow-Headers': 'Content-Type'
-        }
+      return new Response(JSON.stringify({ success: true }), { 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
     }
 
-    // CORSのPreflightリクエスト（OPTIONS）対応
-    if (request.method === 'OPTIONS') {
-      return new Response(null, {
-        headers: {
-          'Access-Control-Allow-Origin': '*',
-          'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-          'Access-Control-Allow-Headers': 'Content-Type'
-        }
-      });
-    }
+    return new Response("VAI Ad Network API is running.", { headers: corsHeaders });
+  }
+};
