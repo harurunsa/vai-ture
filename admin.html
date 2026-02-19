@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VAI Ad Network - 店舗管理画面</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50 p-10">
+    <div class="max-w-2xl mx-auto bg-white p-8 rounded-lg shadow-md">
+        <h1 class="text-2xl font-bold mb-6 text-gray-800">⚡ VAI Ad Network 管理画面</h1>
+        
+        <form id="shopForm" class="space-y-4">
+            <div>
+                <label class="block text-sm font-medium text-gray-700">店舗ID (半角英数字)</label>
+                <input type="text" id="shopId" placeholder="例: my_shop_001" class="mt-1 block w-full border border-gray-300 rounded-md p-2" required>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700">店舗名 (AIに表示されます)</label>
+                <input type="text" id="shopName" placeholder="例: 渋谷 焼肉VAI" class="mt-1 block w-full border border-gray-300 rounded-md p-2" required>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700">予約ページURL (最終目的地)</label>
+                <input type="url" id="shopUrl" placeholder="https://..." class="mt-1 block w-full border border-gray-300 rounded-md p-2" required>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700">1クリックあたりの入札単価 (CPC)</label>
+                <div class="flex items-center mt-1">
+                    <span class="mr-2">¥</span>
+                    <input type="number" id="cpcBid" value="50" min="10" class="block w-full border border-gray-300 rounded-md p-2" required>
+                </div>
+                <p class="text-xs text-gray-500 mt-1">※単価を高く設定するほど、AIからの推薦確率が上がります。</p>
+            </div>
+            
+            <button type="submit" class="w-full bg-blue-600 text-white font-bold py-2 px-4 rounded hover:bg-blue-700">
+                店舗を登録・更新する
+            </button>
+        </form>
+
+        <div id="tagSection" class="mt-10 hidden border-t pt-6">
+            <h2 class="text-lg font-bold text-gray-800 mb-2">🎉 登録完了！</h2>
+            <p class="text-sm text-gray-600 mb-4">以下の「VAIタグ」を、あなたのサイト（Shopify等）の <code>&lt;head&gt;</code> 内に貼り付けてください。これでAI対策と追跡が開始されます。</p>
+            
+            <div class="bg-gray-800 rounded-md p-4 relative">
+                <code id="tagCode" class="text-green-400 text-sm break-all"></code>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // あなたのWorkerのURLに書き換えてください（最後はスラッシュなし）
+        const WORKER_URL = "https://vai-ture.yamashitahiro0628.workers.dev";
+
+        document.getElementById('shopForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const shopData = {
+                id: document.getElementById('shopId').value,
+                name: document.getElementById('shopName').value,
+                url: document.getElementById('shopUrl').value,
+                cpc_bid: parseInt(document.getElementById('cpcBid').value)
+            };
+
+            try {
+                // APIにデータを送信
+                const response = await fetch(`${WORKER_URL}/api/admin/shop`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(shopData)
+                });
+
+                if (response.ok) {
+                    // タグを生成して表示
+                    const tagHtml = `&lt;script src="${WORKER_URL}/vai-tag.js" data-shop-id="${shopData.id}" data-plan="pro" defer&gt;&lt;/script&gt;`;
+                    document.getElementById('tagCode').innerHTML = tagHtml;
+                    document.getElementById('tagSection').classList.remove('hidden');
+                    alert('店舗情報の保存に成功しました！下部にタグが表示されます。');
+                } else {
+                    alert('エラーが発生しました。');
+                }
+            } catch (error) {
+                console.error(error);
+                alert('通信エラー: CORS設定またはURLを確認してください。');
+            }
+        });
+    </script>
+</body>
+</html>
