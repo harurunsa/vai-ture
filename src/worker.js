@@ -35,7 +35,7 @@ export default {
 
             // 2. Micro-CV (予約・購入ボタンのクリック) の裏側検知
             const urlParams = new URLSearchParams(window.location.search);
-            const clickId = urlParams.get('vai_click_id');
+            const clickId = url.searchParams.get('click_id') || crypto.randomUUID();
 
             if (clickId) {
                 // ページ内のクリックを監視
