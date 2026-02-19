@@ -32,14 +32,14 @@
                 <p class="text-xs text-gray-500 mt-1">※単価を高く設定するほど、AIからの推薦確率が上がります。</p>
             </div>
             
-            <button type="submit" class="w-full bg-blue-600 text-white font-bold py-2 px-4 rounded hover:bg-blue-700">
+            <button type="submit" class="w-full bg-blue-600 text-white font-bold py-2 px-4 rounded hover:bg-blue-700 transition duration-200">
                 店舗を登録・更新する
             </button>
         </form>
 
         <div id="tagSection" class="mt-10 hidden border-t pt-6">
             <h2 class="text-lg font-bold text-gray-800 mb-2">🎉 登録完了！</h2>
-            <p class="text-sm text-gray-600 mb-4">以下の「VAIタグ」を、あなたのサイト（Shopify等）の <code>&lt;head&gt;</code> 内に貼り付けてください。これでAI対策と追跡が開始されます。</p>
+            <p class="text-sm text-gray-600 mb-4">以下の「VAIタグ」を、サイトの <code>&lt;head&gt;</code> 内に貼り付けてください。</p>
             
             <div class="bg-gray-800 rounded-md p-4 relative">
                 <code id="tagCode" class="text-green-400 text-sm break-all"></code>
@@ -48,7 +48,7 @@
     </div>
 
     <script>
-        // あなたのWorkerのURLに書き換えてください（最後はスラッシュなし）
+        // あなたのCloudflare WorkerのURL
         const WORKER_URL = "https://vai-ture.yamashitahiro0628.workers.dev";
 
         document.getElementById('shopForm').addEventListener('submit', async (e) => {
@@ -76,11 +76,12 @@
                     document.getElementById('tagSection').classList.remove('hidden');
                     alert('店舗情報の保存に成功しました！下部にタグが表示されます。');
                 } else {
-                    alert('エラーが発生しました。');
+                    const errorData = await response.text();
+                    alert(`エラーが発生しました: ${errorData}`);
                 }
             } catch (error) {
                 console.error(error);
-                alert('通信エラー: CORS設定またはURLを確認してください。');
+                alert('通信エラー: サーバーが起動しているか確認してください。');
             }
         });
     </script>
