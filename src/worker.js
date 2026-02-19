@@ -119,3 +119,42 @@ export default {
     return new Response("VAI Ad Network API is running.");
   }
 };
+
+// ==========================================
+    // 5. [Admin] 店舗情報の登録・更新
+    // ==========================================
+    if (url.pathname === '/api/admin/shop' && request.method === 'POST') {
+      const data = await request.json();
+      
+      // D1の機能 (ON CONFLICT) を使って、新規登録または上書き更新を1発で行う
+      // ※初回登録ボーナスとして、テスト用に ad_balance に 5000円 をチャージしています
+      await env.DB.prepare(`
+        INSERT INTO shops (id, name, url, plan, cpc_bid, ad_balance) 
+        VALUES (?, ?, ?, 'pro', ?, 5000)
+        ON CONFLICT(id) DO UPDATE SET 
+          name = excluded.name, 
+          url = excluded.url, 
+          cpc_bid = excluded.cpc_bid
+      `).bind(data.id, data.name, data.url, data.cpc_bid).run();
+
+      // CORSヘッダーをつけて返す（HTMLファイルから直接アクセスできるようにするため）
+      return new Response(JSON.stringify({ success: true }), {
+        headers: {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*', // 本番ではドメインを絞ります
+          'Access-Control-Allow-Methods': 'POST, OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type'
+        }
+      });
+    }
+
+    // CORSのPreflightリクエスト（OPTIONS）対応
+    if (request.method === 'OPTIONS') {
+      return new Response(null, {
+        headers: {
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type'
+        }
+      });
+    }
