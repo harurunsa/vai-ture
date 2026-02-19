@@ -14,7 +14,7 @@ export default {
     }
 
     // ==========================================
-    // [NEW] 0. 魔法のスクリプト (vai-tag.js) の配信
+    // 0. 魔法のスクリプト (vai-tag.js) の配信
     // ==========================================
     if (url.pathname === '/vai-tag.js') {
       const jsCode = `
@@ -22,33 +22,28 @@ export default {
             const scriptTag = document.currentScript;
             const shopId = scriptTag.getAttribute('data-shop-id');
             const plan = scriptTag.getAttribute('data-plan') || 'free';
-            const WORKER_URL = "${url.origin}"; // 自動的にあなたのサーバーURLになります
+            const WORKER_URL = "${url.origin}";
 
-            // 1. 無料プランなら「Powered by VAI」バッジを強制表示 (バイラル拡散)
             if (plan === 'free') {
                 const badge = document.createElement('a');
-                badge.href = "https://vai.net"; // 将来のあなたのLPのURL
+                badge.href = "https://vai.net";
                 badge.innerHTML = "⚡ Powered by VAI";
                 badge.style.cssText = "position:fixed; bottom:10px; right:10px; background:#000; color:#fff; padding:5px 10px; border-radius:5px; font-size:12px; z-index:9999; text-decoration:none; box-shadow: 0 4px 6px rgba(0,0,0,0.1);";
                 document.body.appendChild(badge);
             }
 
-            // 2. Micro-CV (予約・購入ボタンのクリック) の裏側検知
             const urlParams = new URLSearchParams(window.location.search);
-            const clickId = url.searchParams.get('click_id') || crypto.randomUUID();
+            const clickId = urlParams.get('vai_click_id');
 
             if (clickId) {
-                // ページ内のクリックを監視
                 document.body.addEventListener('click', function(e) {
                     const targetText = e.target.innerText || e.target.value || "";
                     if (targetText.includes('予約') || targetText.includes('購入') || targetText.includes('カート')) {
-                        // 予約ボタンが押されたら、裏でVAIサーバーに通知
                         fetch(WORKER_URL + '/track/micro-cv', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({ click_id: clickId })
-                        }).then(() => console.log('VAI: Micro-CV Recorded!'))
-                          .catch(err => console.error(err));
+                        }).then(() => console.log('VAI: Micro-CV Recorded!')).catch(err => console.error(err));
                     }
                 });
             }
@@ -90,6 +85,8 @@ export default {
       const shopId = url.searchParams.get('shop_id');
       const targetUrl = url.searchParams.get('target');
       const userId = url.searchParams.get('user_id') || 'guest_user';
+      
+      // アプリからのclick_idを受け取るか、無ければ新規発行
       const clickId = url.searchParams.get('click_id') || crypto.randomUUID();
       const now = Date.now();
 
@@ -106,7 +103,6 @@ export default {
     if (url.pathname === '/track/micro-cv' && request.method === 'POST') {
       const { click_id } = await request.json();
       await env.DB.prepare(`UPDATE clicks SET has_micro_cv = TRUE WHERE id = ?`).bind(click_id).run();
-      // ユーザーランクを2（優良）に上げる
       await env.DB.prepare(`UPDATE users SET rank = 2 WHERE id = (SELECT user_id FROM clicks WHERE id = ?)`).bind(click_id).run();
       return new Response("OK", { headers: corsHeaders });
     }
@@ -147,42 +143,32 @@ export default {
     // ==========================================
     if (url.pathname === '/api/admin/shop' && request.method === 'POST') {
       const data = await request.json();
+      // テストボーナスの 5000円 チャージは一旦削除し、純粋に登録だけにしています
       await env.DB.prepare(`
-        INSERT INTO shops (id, name, url, plan, cpc_bid, ad_balance) VALUES (?, ?, ?, 'pro', ?, 5000)
+        INSERT INTO shops (id, name, url, plan, cpc_bid, ad_balance) VALUES (?, ?, ?, 'pro', ?, 0)
         ON CONFLICT(id) DO UPDATE SET name = excluded.name, url = excluded.url, cpc_bid = excluded.cpc_bid
       `).bind(data.id, data.name, data.url, data.cpc_bid).run();
       return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' }});
     }
 
-    return new Response("VAI Ad Network API is running.", { headers: corsHeaders });
-  }
-};
-
-// ==========================================
+    // ==========================================
     // 6. [Payment] Lemon Squeezy Webhook (残高チャージ)
     // ==========================================
     if (url.pathname === '/webhook/lemonsqueezy' && request.method === 'POST') {
       try {
         const payload = await request.json();
         
-        // order_created (注文完了) の時だけ動かす
         if (payload.meta && payload.meta.event_name === 'order_created') {
-          
-          // エラー回避のため、データが無い場合は空のオブジェクトを入れる
           const customData = payload.meta.custom_data || {};
           const shopId = customData.shop_id; 
-          
-          // Lemon Squeezy の金額データ (total) を取得
           const amount = payload.data?.attributes?.total;
 
-          // 万が一 shopId が取得できなかった場合の安全装置
           if (!shopId) {
             console.log("エラー: shop_id がLemon Squeezyから送られてきませんでした");
             return new Response("Missing shop_id", { status: 400, headers: corsHeaders });
           }
 
           if (amount > 0) {
-            // DBの残高を増やす
             await env.DB.prepare(`
               UPDATE shops SET ad_balance = ad_balance + ? WHERE id = ?
             `).bind(amount, shopId).run();
@@ -196,3 +182,8 @@ export default {
         return new Response("Webhook Error", { status: 500, headers: corsHeaders });
       }
     }
+
+    // すべての条件に当てはまらない場合のデフォルトの返事
+    return new Response("VAI Ad Network API is running.", { headers: corsHeaders });
+  } // <-- async fetch() の終わりのカッコ
+}; // <-- export default {} の終わりのカッコ
