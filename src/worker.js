@@ -26,7 +26,7 @@ export default {
       const response = rankedShops.map(shop => ({
         name: shop.name,
         // ここが重要！直リンクではなく、VAIの計測URLを経由させる
-        booking_url: `https://api.vai.net/click?shop_id=${shop.id}&target=${encodeURIComponent(shop.url)}`
+        booking_url: `${url.origin}/click?shop_id=${shop.id}&target=${encodeURIComponent(shop.url)}`
       }));
 
       return new Response(JSON.stringify({ results: response }), {
