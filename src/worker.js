@@ -157,3 +157,33 @@ export default {
     return new Response("VAI Ad Network API is running.", { headers: corsHeaders });
   }
 };
+
+// ==========================================
+    // 6. [Payment] Lemon Squeezy Webhook (残高チャージ)
+    // ==========================================
+    if (url.pathname === '/webhook/lemonsqueezy' && request.method === 'POST') {
+      try {
+        const payload = await request.json();
+        
+        // 注文完了イベント(order_created)のみ処理する
+        if (payload.meta.event_name === 'order_created') {
+          // 決済時にURLパラメータで渡された shop_id を取得
+          const shopId = payload.meta.custom_data.shop_id;
+          
+          // 購入金額を取得 (Lemon Squeezyは日本円の場合、そのままの数値が来る。例: 5000)
+          const amount = payload.data.attributes.total; 
+          
+          // D1データベースの ad_balance を加算する
+          if (shopId && amount > 0) {
+            await env.DB.prepare(`
+              UPDATE shops SET ad_balance = ad_balance + ? WHERE id = ?
+            `).bind(amount, shopId).run();
+            console.log(`VAI: ${shopId} に ${amount}円 チャージ完了！`);
+          }
+        }
+        return new Response("Webhook Received", { status: 200, headers: corsHeaders });
+      } catch (error) {
+        console.error("Webhook Error:", error);
+        return new Response("Webhook Error", { status: 400, headers: corsHeaders });
+      }
+    }
