@@ -90,7 +90,7 @@ export default {
       const shopId = url.searchParams.get('shop_id');
       const targetUrl = url.searchParams.get('target');
       const userId = url.searchParams.get('user_id') || 'guest_user';
-      const clickId = crypto.randomUUID();
+      const clickId = url.searchParams.get('click_id') || crypto.randomUUID();
       const now = Date.now();
 
       await env.DB.prepare(`INSERT INTO clicks (id, shop_id, user_id, clicked_at) VALUES (?, ?, ?, ?)`).bind(clickId, shopId, userId, now).run();
