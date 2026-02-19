@@ -1,4 +1,4 @@
-name = "vai-ad-network"
+name = "vai-ture"
 main = "src/worker.js"
 compatibility_date = "2024-02-19"
 
