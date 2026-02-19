@@ -1,0 +1,9 @@
+name = "vai-ad-network"
+main = "src/worker.js"
+compatibility_date = "2024-02-19"
+
+# D1データベースのバインディング
+[[d1_databases]]
+binding = "DB"
+database_name = "vai-db"
+database_id = "あなたの_D1_データベースIDをここに入力"
