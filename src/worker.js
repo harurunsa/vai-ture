@@ -13,7 +13,7 @@ export default {
     // ==========================================
     // 🔑 【重要】ここにLINEのチャネルアクセストークンを貼る
     // ==========================================
-    const LINE_TOKEN = "x02n56Gh0i9pzGrqdwMV2aardLONHY92DYlwyYBckn0XcRU8Q1Intf+BeqFsJN2nwO2xzeXO2L8yBTjz+Zuxum+4pIEkJjZ8U/DGoZiYmpNgZAYhvx4qF7HhtW9+3FSj41H8JpmGr9F/OMDfy+12BgdB04t89/1O/w1cDnyilFU=";
+    const LINE_TOKEN = env.LINE_TOKEN;
 
     // ==========================================
     // 0. 魔法のスクリプト (vai-tag.js)
