@@ -6,4 +6,4 @@ compatibility_date = "2024-02-19"
 [[d1_databases]]
 binding = "DB"
 database_name = "vai-db1"
-"database_id": "801e36f3-bbc3-4884-9e63-c6da935b5c40"
+database_id = "801e36f3-bbc3-4884-9e63-c6da935b5c40"
